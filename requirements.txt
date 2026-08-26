@@ -1,0 +1,17 @@
+fastapi==0.115.0
+uvicorn[standard]==0.30.6
+strawberry-graphql[fastapi]==0.239.2
+
+sqlalchemy[asyncio]==2.0.35
+asyncpg==0.29.0
+alembic==1.13.2
+
+redis==5.0.8
+
+pydantic==2.9.2
+pydantic-settings==2.5.2
+
+passlib[bcrypt]==1.7.4
+pyjwt==2.9.0
+
+python-multipart==0.0.9
