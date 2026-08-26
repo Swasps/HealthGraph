@@ -76,7 +76,7 @@ class PatientRepository(BaseRepository[Patient]):
         )
         return await paginate(self.session, stmt, spec, first, after)
 
-    async def create(
+    def create(
         self,
         *,
         mrn: str,
