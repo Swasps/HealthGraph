@@ -3,6 +3,20 @@ import logging
 import sys
 from typing import Any
 
+from app.middleware.request_context import client_ip_var, request_id_var
+
+
+class RequestContextFilter(logging.Filter):
+    """Stamps every log record emitted during a request with that
+    request's id, so lines from different concurrent requests can be
+    told apart in aggregated logs without passing the id through every
+    function call by hand."""
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        record.request_id = request_id_var.get()
+        record.client_ip = client_ip_var.get()
+        return True
+
 
 class JSONFormatter(logging.Formatter):
     """Renders log records as single-line JSON so they can be ingested by
@@ -15,7 +29,7 @@ class JSONFormatter(logging.Formatter):
             "logger": record.name,
             "message": record.getMessage(),
         }
-        for key in ("request_id", "user_id", "role", "path", "duration_ms"):
+        for key in ("request_id", "client_ip", "user_id", "role", "path", "duration_ms"):
             value = getattr(record, key, None)
             if value is not None:
                 payload[key] = value
@@ -31,6 +45,7 @@ def configure_logging(debug: bool = False) -> None:
 
     handler = logging.StreamHandler(sys.stdout)
     handler.setFormatter(JSONFormatter())
+    handler.addFilter(RequestContextFilter())
     root.addHandler(handler)
 
     # Quiet noisy third-party loggers unless we're actively debugging.

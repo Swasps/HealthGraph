@@ -26,6 +26,7 @@ from app.models.user import User
 from app.repositories.patient import PatientRepository
 from app.repositories.provider import ProviderRepository
 from app.repositories.user import RefreshTokenRepository, UserRepository
+from app.services.audit_service import AuditService
 
 
 @dataclass(frozen=True, slots=True)
@@ -41,12 +42,16 @@ class AuthService:
         self.refresh_tokens = RefreshTokenRepository(session)
         self.patients = PatientRepository(session)
         self.providers = ProviderRepository(session)
+        self.audit = AuditService()
 
     async def register(self, *, email: str, password: str, role: Role) -> User:
         if await self.users.get_by_email(email) is not None:
             raise ConflictError("An account with this email already exists.")
         user = self.users.create(email=email, hashed_password=hash_password(password), role=role)
         await self.session.flush()
+        await self.audit.record(
+            user_id=user.id, action="user.register", resource_type="user", resource_id=str(user.id)
+        )
         return user
 
     async def authenticate(self, *, email: str, password: str) -> User:
@@ -55,9 +60,19 @@ class AuthService:
         # doesn't leak which emails are registered.
         valid = verify_password(password, user.hashed_password) if user else False
         if not user or not valid:
+            await self.audit.record(
+                user_id=user.id if user else None,
+                action="user.login_failed",
+                resource_type="user",
+                resource_id=str(user.id) if user else None,
+                details={"email": email},
+            )
             raise AuthenticationError("Invalid email or password.")
         if not user.is_active:
             raise AuthenticationError("This account has been disabled.")
+        await self.audit.record(
+            user_id=user.id, action="user.login", resource_type="user", resource_id=str(user.id)
+        )
         return user
 
     async def issue_token_pair(self, user: User) -> TokenPair:
@@ -97,6 +112,12 @@ class AuthService:
         stored = await self.refresh_tokens.get_by_hash(hash_refresh_token(raw_refresh_token))
         if stored is not None:
             await self.refresh_tokens.revoke(stored)
+            await self.audit.record(
+                user_id=stored.user_id,
+                action="user.logout",
+                resource_type="user",
+                resource_id=str(stored.user_id),
+            )
 
     async def resolve_current_user(self, claims: AccessTokenClaims) -> CurrentUser:
         """Builds the request-scoped identity from validated JWT claims.
