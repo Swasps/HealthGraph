@@ -1,7 +1,10 @@
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
+from strawberry.fastapi import GraphQLRouter
 
+from app.api.graphql.context import get_graphql_context
+from app.api.graphql.schema import schema
 from app.api.rest.admin import router as admin_router
 from app.api.rest.auth import router as auth_router
 from app.cache.client import redis_client
@@ -44,6 +47,9 @@ app.add_middleware(RequestContextMiddleware)
 
 app.include_router(auth_router)
 app.include_router(admin_router)
+app.include_router(
+    GraphQLRouter(schema, context_getter=get_graphql_context), prefix="/graphql"
+)
 
 
 @app.get("/health", tags=["system"])
