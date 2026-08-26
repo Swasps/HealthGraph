@@ -7,6 +7,7 @@ from app.api.graphql.types.clinical import Encounter, Medication
 from app.api.graphql.types.observations import LabResult
 from app.api.graphql.types.pagination import Connection, to_connection
 from app.api.graphql.types.patient import Patient
+from app.api.graphql.types.timeline import TimelineEntry
 from app.models.enums import Role
 from app.repositories.clinical import EncounterRepository, MedicationRepository
 from app.repositories.observations import LabResultRepository
@@ -14,6 +15,7 @@ from app.repositories.pagination import Page
 from app.repositories.patient import PatientRepository
 from app.repositories.relationship import PatientProviderRelationshipRepository
 from app.services.patient_service import PatientService
+from app.services.timeline_service import build_patient_timeline
 
 _MAX_PAGE_SIZE = 100
 
@@ -141,3 +143,26 @@ class Query:
         repo = LabResultRepository(context.session)
         page = await repo.paginate_by_patient(pid, _clamp(first), after)
         return to_connection(page, LabResult.from_model)
+
+    @strawberry.field(
+        description=(
+            "A patient's full clinical history — encounters, diagnoses, "
+            "medications, lab results, procedures, and vital signs — merged "
+            "into one reverse-chronological feed. This is the query most at "
+            "risk of N+1 fan-out; see app.services.timeline_service for how "
+            "batching keeps it to a fixed number of queries per request."
+        )
+    )
+    async def patient_timeline(
+        self,
+        info: strawberry.Info[GraphQLContext, None],
+        patient_id: strawberry.ID,
+        limit: int = 50,
+    ) -> list[TimelineEntry]:
+        context = info.context
+        user = context.require_authenticated()
+        pid = UUID(str(patient_id))
+        await context.access_policy.require_full_record_access(user, pid)
+
+        items = await build_patient_timeline(context.loaders, pid, limit)
+        return [TimelineEntry.from_item(item) for item in items]

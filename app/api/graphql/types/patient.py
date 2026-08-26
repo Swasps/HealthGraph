@@ -5,8 +5,14 @@ import strawberry
 
 from app.api.graphql.context import GraphQLContext
 from app.api.graphql.enums import Sex
+from app.api.graphql.types.clinical import Encounter, Medication
+from app.api.graphql.types.observations import LabResult
+from app.api.graphql.types.timeline import TimelineEntry
 from app.models.patient import Patient as PatientModel
 from app.services.patient_service import PatientRecord
+from app.services.timeline_service import build_patient_timeline
+
+_DEFAULT_NESTED_LIMIT = 20
 
 
 @strawberry.type(description="A patient and their demographic information.")
@@ -39,6 +45,46 @@ class Patient:
         if context.access_policy.can_view_ssn(context.current_user, UUID(str(self.id))):
             return self._ssn
         return None
+
+    @strawberry.field(
+        description=(
+            "This patient's encounters, most recent first (batched via "
+            "DataLoader — safe to select under a `patients` list without "
+            "an N+1 query per patient)."
+        )
+    )
+    async def encounters(
+        self, info: strawberry.Info[GraphQLContext, None], limit: int = _DEFAULT_NESTED_LIMIT
+    ) -> list[Encounter]:
+        items = await info.context.loaders.encounters_by_patient.load(UUID(str(self.id)))
+        return [Encounter.from_model(item) for item in items[:limit]]
+
+    @strawberry.field(description="This patient's medications, most recent first.")
+    async def medications(
+        self, info: strawberry.Info[GraphQLContext, None], limit: int = _DEFAULT_NESTED_LIMIT
+    ) -> list[Medication]:
+        items = await info.context.loaders.medications_by_patient.load(UUID(str(self.id)))
+        return [Medication.from_model(item) for item in items[:limit]]
+
+    @strawberry.field(description="This patient's lab results, most recent first.")
+    async def lab_results(
+        self, info: strawberry.Info[GraphQLContext, None], limit: int = _DEFAULT_NESTED_LIMIT
+    ) -> list[LabResult]:
+        items = await info.context.loaders.lab_results_by_patient.load(UUID(str(self.id)))
+        return [LabResult.from_model(item) for item in items[:limit]]
+
+    @strawberry.field(
+        description=(
+            "This patient's full clinical history — encounters, diagnoses, "
+            "medications, lab results, procedures, and vital signs — merged "
+            "into one reverse-chronological feed."
+        )
+    )
+    async def timeline(
+        self, info: strawberry.Info[GraphQLContext, None], limit: int = 50
+    ) -> list[TimelineEntry]:
+        items = await build_patient_timeline(info.context.loaders, UUID(str(self.id)), limit)
+        return [TimelineEntry.from_item(item) for item in items]
 
     @classmethod
     def from_record(cls, record: PatientRecord) -> "Patient":

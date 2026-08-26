@@ -42,6 +42,15 @@ def _by_id_loader(repo: BaseRepository) -> Callable[[Sequence[UUID]], Awaitable[
 def _by_patient_loader(
     repo: PatientScopedRepository,
 ) -> Callable[[Sequence[UUID]], Awaitable[list]]:
+    """Note: `list_by_patient_ids` returns each patient's *full* history,
+    unbounded — callers needing only the first page (e.g. a nested
+    `Patient.encounters(limit: 5)` field) slice in Python after the load.
+    That's the right trade for the record volumes this system deals with;
+    a patient with tens of thousands of encounters would need a bounded
+    per-group window (a `ROW_NUMBER() OVER (PARTITION BY patient_id ...)`
+    query) instead of this plain `IN (...)`.
+    """
+
     async def batch_load(patient_ids: Sequence[UUID]) -> list:
         grouped = await repo.list_by_patient_ids(patient_ids)
         return [grouped.get(pid, []) for pid in patient_ids]
