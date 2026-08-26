@@ -11,7 +11,7 @@ database leak alone doesn't hand out valid sessions.
 import hashlib
 import secrets
 from dataclasses import dataclass
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from uuid import UUID
 
 import jwt
@@ -31,7 +31,7 @@ class AccessTokenClaims:
 
 
 def create_access_token(*, user_id: UUID, role: Role) -> str:
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     expires_at = now + timedelta(minutes=settings.access_token_expire_minutes)
     payload = {
         "sub": str(user_id),
@@ -58,7 +58,7 @@ def decode_access_token(token: str) -> AccessTokenClaims:
         return AccessTokenClaims(
             user_id=UUID(payload["sub"]),
             role=Role(payload["role"]),
-            expires_at=datetime.fromtimestamp(payload["exp"], tz=timezone.utc),
+            expires_at=datetime.fromtimestamp(payload["exp"], tz=UTC),
         )
     except (KeyError, ValueError) as exc:
         raise AuthenticationError("malformed access token") from exc
@@ -76,4 +76,4 @@ def hash_refresh_token(raw_token: str) -> str:
 
 
 def refresh_token_expiry() -> datetime:
-    return datetime.now(timezone.utc) + timedelta(days=settings.refresh_token_expire_days)
+    return datetime.now(UTC) + timedelta(days=settings.refresh_token_expire_days)
