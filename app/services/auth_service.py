@@ -48,7 +48,12 @@ class AuthService:
         if await self.users.get_by_email(email) is not None:
             raise ConflictError("An account with this email already exists.")
         user = self.users.create(email=email, hashed_password=hash_password(password), role=role)
-        await self.session.flush()
+        # Commit (not just flush) before auditing: the audit entry is
+        # written through its own connection, and `audit_logs.user_id`
+        # has a foreign key to `users.id`. A flush is only visible within
+        # this transaction, so that insert would race the still-open one
+        # here and fail — the new user has to be durably committed first.
+        await self.session.commit()
         await self.audit.record(
             user_id=user.id, action="user.register", resource_type="user", resource_id=str(user.id)
         )

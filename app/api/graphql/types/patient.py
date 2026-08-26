@@ -5,11 +5,12 @@ import strawberry
 
 from app.api.graphql.context import GraphQLContext
 from app.api.graphql.enums import Sex
+from app.models.patient import Patient as PatientModel
 from app.services.patient_service import PatientRecord
 
 
 @strawberry.type(description="A patient and their demographic information.")
-class PatientType:
+class Patient:
     id: strawberry.ID
     mrn: str
     first_name: str
@@ -40,7 +41,9 @@ class PatientType:
         return None
 
     @classmethod
-    def from_record(cls, record: PatientRecord) -> "PatientType":
+    def from_record(cls, record: PatientRecord) -> "Patient":
+        """Builds from the cache-aside `PatientRecord` projection — used by
+        the single-patient `patient(id)` query."""
         return cls(
             id=strawberry.ID(str(record.id)),
             mrn=record.mrn,
@@ -54,4 +57,25 @@ class PatientType:
             created_at=record.created_at,
             updated_at=record.updated_at,
             _ssn=record.ssn,
+        )
+
+    @classmethod
+    def from_model(cls, patient: PatientModel) -> "Patient":
+        """Builds directly from the ORM row — used by list queries
+        (`patients`), which go straight through the repository rather
+        than the single-id cache (a search result set isn't cacheable by
+        a single key the way `patient(id)` is)."""
+        return cls(
+            id=strawberry.ID(str(patient.id)),
+            mrn=patient.mrn,
+            first_name=patient.first_name,
+            last_name=patient.last_name,
+            date_of_birth=patient.date_of_birth,
+            sex=patient.sex,
+            phone=patient.phone,
+            email=patient.email,
+            address=patient.address,
+            created_at=patient.created_at,
+            updated_at=patient.updated_at,
+            _ssn=patient.ssn,
         )

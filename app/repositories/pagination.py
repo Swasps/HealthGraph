@@ -55,6 +55,18 @@ class Page(Generic[ItemT]):
     has_previous_page: bool
     start_cursor: str | None
     end_cursor: str | None
+    cursor_for: Callable[[ItemT], str]
+
+    @classmethod
+    def empty(cls) -> "Page[ItemT]":
+        return cls(
+            items=[],
+            has_next_page=False,
+            has_previous_page=False,
+            start_cursor=None,
+            end_cursor=None,
+            cursor_for=lambda _item: "",
+        )
 
 
 async def paginate(
@@ -108,4 +120,5 @@ async def paginate(
         has_previous_page=after is not None,
         start_cursor=cursor_for(items[0]) if items else None,
         end_cursor=cursor_for(items[-1]) if items else None,
+        cursor_for=cursor_for,
     )

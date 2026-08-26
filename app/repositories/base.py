@@ -65,23 +65,31 @@ class PatientScopedRepository(BaseRepository[ModelT]):
         """
         if not patient_ids:
             return {}
+        # `type(self)` rather than `self` when reaching for these two
+        # attributes: they're `InstrumentedAttribute`s (live SQLAlchemy
+        # descriptors), and accessing a descriptor through an *instance*
+        # invokes its instance-bound `__get__` — which assumes that
+        # instance is a mapped ORM row, not a repository. Going through
+        # the class gets the column expression itself instead.
+        patient_id_column = type(self).patient_id_column
         stmt = (
             select(self.model)
-            .where(self.patient_id_column.in_(patient_ids))
-            .order_by(self.sort_column.desc())
+            .where(patient_id_column.in_(patient_ids))
+            .order_by(type(self).sort_column.desc())
         )
         result = await self.session.execute(stmt)
         grouped: dict[UUID, list[ModelT]] = defaultdict(list)
         for row in result.scalars():
-            grouped[getattr(row, self.patient_id_column.key)].append(row)
+            grouped[getattr(row, patient_id_column.key)].append(row)
         return grouped
 
     async def paginate_by_patient(
         self, patient_id: UUID, first: int, after: str | None
     ) -> Page[ModelT]:
-        stmt = select(self.model).where(self.patient_id_column == patient_id)
+        patient_id_column = type(self).patient_id_column
+        stmt = select(self.model).where(patient_id_column == patient_id)
         spec = KeysetSpec(
-            sort_column=self.sort_column,
+            sort_column=type(self).sort_column,
             id_column=self.model.id,
             parse_sort_value=self.sort_parser,
             descending=True,
