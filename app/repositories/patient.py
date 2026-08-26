@@ -10,6 +10,11 @@ from app.repositories.pagination import KeysetSpec, Page, paginate
 class PatientRepository(BaseRepository[Patient]):
     model = Patient
 
+    async def get_by_user_id(self, user_id) -> Patient | None:
+        stmt = select(Patient).where(Patient.user_id == user_id)
+        result = await self.session.execute(stmt)
+        return result.scalar_one_or_none()
+
     async def get_by_mrn(self, mrn: str) -> Patient | None:
         stmt = select(Patient).where(Patient.mrn == mrn)
         result = await self.session.execute(stmt)

@@ -30,4 +30,4 @@ class Provider(TimestampMixin, Base):
     specialty: Mapped[str | None] = mapped_column(String(150))
 
     user: Mapped["User | None"] = relationship(back_populates="provider")  # noqa: F821
-    facility: Mapped["Facility"] = relationship(back_populates="providers")
+    facility: Mapped["Facility"] = relationship(back_populates="providers")  # noqa: F821

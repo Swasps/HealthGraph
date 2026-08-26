@@ -20,6 +20,11 @@ class UserRepository(BaseRepository[User]):
         user = User(email=email, hashed_password=hashed_password, role=role)
         return self.add(user)
 
+    async def list_all(self, *, limit: int = 200) -> list[User]:
+        stmt = select(User).order_by(User.created_at.desc()).limit(limit)
+        result = await self.session.execute(stmt)
+        return list(result.scalars().all())
+
 
 class RefreshTokenRepository(BaseRepository[RefreshToken]):
     model = RefreshToken
